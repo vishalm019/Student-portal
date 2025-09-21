@@ -2,7 +2,6 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
 from flask import Flask, request, jsonify
-from pydantic import BaseModel, EmailStr
 import random
 from db_config import DB_CONFIG
 import string
@@ -39,10 +38,9 @@ def insert_user():
     try:
         name = request.json.get('name')
         email = request.json.get('email')
-        password = request.json.get('password')
         pwd = ''.join(random.choices(string.ascii_letters, k=5))
         query = "INSERT INTO users (name, email, password) VALUES (%s, %s, %s) RETURNING userid"
-        params = (name,email,password,)
+        params = (name,email,pwd,)
         result = execute_query(query, params, fetch=True, get_one=True, as_dict=True)
         if result:
             return jsonify({"status_code": 200, "status": "User added", "userid": result[0][0]})
