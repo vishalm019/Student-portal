@@ -1,13 +1,17 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from datetime import datetime
+from datetime import datetime,timedelta,timezone
 from flask import Flask, request, jsonify
 import random
 from db_config import DB_CONFIG
 import string
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt,create_refresh_token
+from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = 'my_key'
+app.config["JWT_SECRET_KEY"] = 'my_jwt_secret_key'
+jwt = JWTManager(app)
 
 def json_validate(required_fields):
     payload = request.json
@@ -42,9 +46,31 @@ def execute_query(query, params=None, fetch=False, get_one=False, as_dict=False)
         cur.close()
         conn.close()
 
+@app.route("/refresh", methods=["POST"])
+@jwt_required(refresh=True)
+def refresh():
+    identity = get_jwt_identity()
+    new_access_token = create_access_token(identity=identity)
+    return {"access_token": new_access_token}
+
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.json.get('username')
+    password = request.json.get('password')
+    query = "SELECT email FROM user_table WHERE email = %s AND password = %s"
+    params = (username,password)
+    result = execute_query(query,params, fetch=True, get_one=True)
+    print(result)
+    if result is None:
+        return jsonify({"status_code":500,"status": "Invalid credentials"})
+    access_token = create_access_token(identity=result)
+    refresh_token = create_refresh_token(identity=result)   
+    return jsonify({"status": "success", "token": access_token,"refresh_token":refresh_token})
+
 
 # User Endpoints
 @app.route('/insert_user', methods=['POST'])
+@jwt_required()
 def insert_user():
     try:
         name = request.json.get('name')
@@ -68,6 +94,7 @@ def insert_user():
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
 
 @app.route('/get_users', methods=['GET'])
+@jwt_required()
 def get_users():
     try:
         dummy = []
@@ -80,6 +107,7 @@ def get_users():
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
 
 @app.route('/update_user', methods=['POST'])
+@jwt_required()
 def update_user():
     try:
         userid = request.json.get('userid')
@@ -103,6 +131,7 @@ def update_user():
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
 
 @app.route('/delete_user', methods=['POST'])
+@jwt_required()
 def delete_user():
     try:
         userid = request.json.get('userid')
@@ -127,6 +156,7 @@ def delete_user():
 
 # Task Endpoints
 @app.route('/add_task', methods=['POST'])
+@jwt_required()
 def add_task():
     try:
         userid = request.json.get('userid')
@@ -153,6 +183,7 @@ def add_task():
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
 
 @app.route('/get_task', methods=['POST'])
+@jwt_required()
 def get_task():
     try:
         userid = request.json.get('userid')
@@ -180,6 +211,7 @@ def get_task():
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
 
 @app.route('/all_tasks', methods=['GET'])
+@jwt_required()
 def all_tasks():
     try:
         priority = request.json.get('priority')
@@ -224,6 +256,7 @@ def all_tasks():
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
 
 @app.route('/edit_task', methods=['POST'])
+@jwt_required()
 def edit_task():
     try:
         userid = request.json.get('userid')
@@ -252,6 +285,7 @@ def edit_task():
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
 
 @app.route('/delete_task', methods=['POST'])
+@jwt_required()
 def delete_task():
     try:
         taskid = request.json.get('taskid')
@@ -269,6 +303,7 @@ def delete_task():
 
 # Notes Endpoints
 @app.route('/add_notes', methods=['POST'])
+@jwt_required()
 def add_notes():
     try:
         userid = request.json.get('userid')
@@ -293,6 +328,7 @@ def add_notes():
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
 
 @app.route('/get_notes', methods=['GET'])
+@jwt_required()
 def get_notes():
     try:
         userid = request.json.get('userid')
@@ -314,6 +350,7 @@ def get_notes():
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
 
 @app.route('/all_notes', methods=['GET'])
+@jwt_required()
 def all_notes():
     try:
         query = "SELECT title, body FROM notes"
@@ -325,6 +362,7 @@ def all_notes():
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"}), 500
 
 @app.route('/edit_notes', methods=['POST'])
+@jwt_required()
 def edit_notes():
     try:
         userid = request.json.get('userid')
@@ -350,6 +388,7 @@ def edit_notes():
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
 
 @app.route('/delete_note', methods=['POST'])
+@jwt_required()
 def delete_note():
     try:
         s_id = request.json.get('s_id')
@@ -372,6 +411,7 @@ def delete_note():
 
 # Combined Endpoints
 @app.route('/user/<int:userid>/details', methods=['GET'])
+@jwt_required()
 def user_details(userid: int):
     try:
         user_query = "SELECT userid, name, email FROM user_table WHERE userid = %s"
@@ -398,6 +438,7 @@ def user_details(userid: int):
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"}), 500
 
 @app.route('/alluser_details', methods=['GET'])
+@jwt_required()
 def alluser_details():
     try:
         users_query = "SELECT userid, name, email FROM user_table"
