@@ -7,6 +7,16 @@ from db_config import DB_CONFIG
 import string
 
 app = Flask(__name__)
+app.secret_key = 'my_key'
+
+def json_validate(required_fields):
+    payload = request.json
+    missing = []
+    for field in required_fields:
+        value = payload.get(field)
+        if value is None or str(value).strip() == "":
+            missing.append(field)
+    return missing
 
 
 def execute_query(query, params=None, fetch=False, get_one=False, as_dict=False):
@@ -14,6 +24,7 @@ def execute_query(query, params=None, fetch=False, get_one=False, as_dict=False)
     cursor_factory = RealDictCursor if as_dict else None
     cur = conn.cursor(cursor_factory=cursor_factory)
     try:
+        print(query,params)
         cur.execute(query, params)
         conn.commit()
         if fetch:
@@ -39,12 +50,19 @@ def insert_user():
         name = request.json.get('name')
         email = request.json.get('email')
         pwd = ''.join(random.choices(string.ascii_letters, k=5))
-        query = "INSERT INTO users (name, email, password) VALUES (%s, %s, %s) RETURNING userid"
+
+        validate = ["name","email"]
+        missing = json_validate(validate)
+        if missing:
+            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+        
+        query = "INSERT INTO user_table (name, email, password) VALUES (%s, %s, %s) RETURNING userid"
         params = (name,email,pwd,)
-        result = execute_query(query, params, fetch=True, get_one=True, as_dict=True)
-        if result:
-            return jsonify({"status_code": 200, "status": "User added", "userid": result[0][0]})
-        else:
+        result = execute_query(query, params, fetch=True, get_one=True, as_dict=False)
+        print(result,'result')
+        if result != []:
+            return jsonify({"status_code": 200, "status": "User added", "userid": result[0]})
+        else:   
             return jsonify({"status_code": 500, "status": "Failed to add user"})
     except Exception as e:
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
@@ -52,9 +70,12 @@ def insert_user():
 @app.route('/get_users', methods=['GET'])
 def get_users():
     try:
-        query = "SELECT userid, name, email FROM users"
+        dummy = []
+        query = "SELECT userid, name, email FROM user_table"
         users = execute_query(query, fetch=True, as_dict=True)
-        return jsonify({"status": "Users fetched", "data": users[0][0]})
+        for i in users:
+            dummy.append(i)
+        return jsonify({"status": "Users fetched", "data": dummy})
     except Exception as e:
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
 
@@ -65,13 +86,16 @@ def update_user():
         name = request.json.get('name')
         email = request.json.get('email')
         password = request.json.get('password')
-        check_query = "SELECT userid FROM users WHERE userid = %s"
+        validate = ["name","email","userid","password"]
+        missing = json_validate(validate)
+        if missing:
+            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+        check_query = "SELECT userid FROM user_table WHERE userid = %s"
         params = (userid,)
         user_exists = execute_query(check_query,params,fetch=True,get_one=True)
         if not user_exists:
             return jsonify({"status_code": 404, "status": "User not found"})
-        
-        query = "UPDATE users SET name = %s, email = %s,password = %s WHERE userid = %s"
+        query = "UPDATE user_table SET name = %s, email = %s,password = %s WHERE userid = %s"
         params = (name,email,password,userid,)
         execute_query(query, params)
         return jsonify({"status_code":200,"status": "User updated successfully"})
@@ -82,12 +106,20 @@ def update_user():
 def delete_user():
     try:
         userid = request.json.get('userid')
-        check_query = "SELECT userid FROM users WHERE userid = %s"
+        validate = ["userid"]
+        missing = json_validate(validate)
+        if missing:
+            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+        
+        check_query = "SELECT userid FROM user_table WHERE userid = %s"
         params = (userid,)
         user_exists = execute_query(check_query,params, fetch=True, get_one=True)
         if not user_exists:
             return jsonify({"status_code": 404, "status": "User not found"})
-        query = "DELETE FROM users WHERE userid = %s"
+        query2 = "DELETE FROM task WHERE userid = %s"
+        params = (userid,)
+        execute_query(query2,params)
+        query = "DELETE FROM user_table WHERE userid = %s"
         execute_query(query,params)
         return jsonify({"status_code":200,"status": "User deleted successfully"})
     except Exception as e:
@@ -103,12 +135,17 @@ def add_task():
         due_date = request.json.get('due_date')
         priority = request.json.get('priority')
         status = request.json.get('status')
-        user_exists_query = "SELECT userid FROM users WHERE userid = %s"
+        validate = ["userid","title","description","due_date","priority","status"]
+        missing = json_validate(validate)
+        if missing:
+            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+        
+        user_exists_query = "SELECT userid FROM user_table WHERE userid = %s"
         params = (userid,)
         user_exists = execute_query(user_exists_query,params, fetch=True, get_one=True)
         if not user_exists:
             return jsonify({"status_code": 404, "status": "User not found"})
-        query = "INSERT INTO tasks (userid, title, description, due_date, priority, status) VALUES (%s, %s, %s, %s, %s, %s)"
+        query = "INSERT INTO task (userid, title, description, due_date, priority, status) VALUES (%s, %s, %s, %s, %s, %s)"
         params = (userid,title,description,due_date,priority,status)
         execute_query(query, params)
         return jsonify({"status": "Successfully added task"})
@@ -119,12 +156,16 @@ def add_task():
 def get_task():
     try:
         userid = request.json.get('userid')
-        user_exists_query = "SELECT userid FROM users WHERE userid = %s"
+        validate = ["userid"]
+        missing = json_validate(validate)
+        if missing:
+            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+        user_exists_query = "SELECT userid FROM user_table WHERE userid = %s"
         params = (userid,)
         user_exists = execute_query(user_exists_query,params, fetch=True, get_one=True)
         if not user_exists:
             return jsonify({"status_code": 404, "status": "User not found"})
-        query = "SELECT task_id, title, description, priority, status, due_date FROM tasks WHERE userid = %s"
+        query = "SELECT task_id, title, description, priority, status, due_date FROM task WHERE userid = %s"
         params = (userid,)
         tasks = execute_query(query,params, fetch=True, as_dict=True)
         if not tasks:
@@ -141,35 +182,42 @@ def get_task():
 @app.route('/all_tasks', methods=['GET'])
 def all_tasks():
     try:
-        # priority = request.json.get('priority')
-        # status = request.json.get('status')
-        # due_date = request.json.get('due_date')
-        # description = request.json.get('description')
-        # title = request.json.get('title')
-        data = request.get_json()
-        query = "SELECT task_id, title, description, priority, status, due_date FROM tasks WHERE 1=1"
+        priority = request.json.get('priority')
+        status = request.json.get('status')
+        due_date = request.json.get('due_date')
+        description = request.json.get('description')
+        title = request.json.get('title')
+        userid = request.json.get('userid')
+        validate = ["userid"]
+        missing = json_validate(validate)
+        if missing:
+            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+        user_exists_query = "SELECT userid FROM user_table WHERE userid = %s"
+        params = (userid,)
+        user_exists = execute_query(user_exists_query,params, fetch=True, get_one=True)
+        if not user_exists:
+            return jsonify({"status_code": 404, "status": "User not found"})
+        query = "SELECT task_id, title, description, priority, status, due_date FROM task WHERE 1=1"
         params = []
-        if data.priority:
+        if priority:
             query += " AND priority = %s"
-            params.append(data.priority)
-        if data.status:
+            params.append(priority)
+        if status:
             query += " AND status = %s"
-            params.append(data.status)
-        if data.description:
+            params.append(status)
+        if due_date:
             query += " AND due_date >= %s"
-            params.append(data.description)
-            
-        if data.title:
+            params.append(due_date)
+        if description:
+            query += " AND description = %s"
+            params = (description)
+        if title:
             query += "AND title = %s"
-            params.append(data.title)
+            params.append(title)
         
         tasks = execute_query(query, tuple(params), fetch=True, as_dict=True)
         if not tasks:
             return jsonify({"status_code": 404, "status": "Task data does not exist"})
-            
-        for task in tasks:
-            if isinstance(task.get('due_date'), datetime):
-                task['due_date'] = task['due_date'].isoformat()
         
         return jsonify({"status": "Successfully fetched tasks", "details": tasks})
     except Exception as e:
@@ -185,13 +233,18 @@ def edit_task():
         description = request.json.get('description')
         title = request.json.get('title')
         task_id = request.json.get('task_id')
-        check_query = "SELECT userid FROM users WHERE userid = %s"
+        validate = ["userid"]
+        missing = json_validate(validate)
+        if missing:
+            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+        
+        check_query = "SELECT userid FROM user_table WHERE userid = %s"
         params = (userid,)
         user_exists = execute_query(check_query,params, fetch=True, get_one=True)
         if not user_exists:
             return jsonify({"status_code": 404, "status": "User not found"})
         
-        query = "UPDATE tasks SET title = %s, description = %s, due_date = %s, priority = %s, status = %s WHERE task_id = %s AND userid = %s"
+        query = "UPDATE task SET title = %s, description = %s, due_date = %s, priority = %s, status = %s WHERE task_id = %s AND userid = %s"
         params = (title,description,due_date,priority,status,task_id,userid)
         execute_query(query, params)
         return jsonify({"status": "Successfully updated task"})
@@ -202,7 +255,12 @@ def edit_task():
 def delete_task():
     try:
         taskid = request.json.get('taskid')
-        query = "DELETE FROM tasks WHERE task_id = %s"
+        validate = ["taskid"]
+        missing = json_validate(validate)
+        if missing:
+            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+        
+        query = "DELETE FROM task WHERE task_id = %s"
         params = (taskid,)
         execute_query(query,params)
         return jsonify({"status_code": 200, "status": "Successfully deleted task"})
@@ -216,7 +274,12 @@ def add_notes():
         userid = request.json.get('userid')
         title = request.json.get('title')
         body = request.json.get('body')
-        user_exists_query = "SELECT s_id FROM users WHERE userid = %s"
+        validate = ["userid","title","body"]
+        missing = json_validate(validate)
+        if missing:
+            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+        
+        user_exists_query = "SELECT userid FROM user_table WHERE userid = %s"
         params = (userid,)
         user_exists = execute_query(user_exists_query,params, fetch=True, get_one=True)
         if not user_exists:
@@ -229,17 +292,24 @@ def add_notes():
     except Exception as e:
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
 
-@app.route('/get_notes', methods=['POST'])
+@app.route('/get_notes', methods=['GET'])
 def get_notes():
     try:
-        userid = request.json.get(userid,)
-        s_id = request.json.get('s_id')
+        userid = request.json.get('userid')
+        s_id = request.json.get('s_id') 
+        validate = ["userid","s_id"]
+        dummy = []
+        missing = json_validate(validate)
+        if missing: 
+            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
         query = "SELECT title, body FROM notes WHERE s_id = %s AND userid = %s"
         params = (s_id,userid,)
-        note = execute_query(query,params, fetch=True, get_one=True, as_dict=True)
+        note = execute_query(query,params, fetch=True, as_dict=True)
         if not note:
             return jsonify({"status_code": 404, "status": "Notes data does not exist"})
-        return jsonify({"status_code": 200, "status": "Successfully fetched notes", "details": note})
+        for i in note:
+            dummy.append(i)
+        return jsonify({"status_code": 200, "status": "Successfully fetched notes", "details":dummy})
     except Exception as e:
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
 
@@ -261,6 +331,11 @@ def edit_notes():
         title = request.json.get('title')
         body = request.json.get('body')
         s_id = request.json.get('s_id')
+        validate = ["userid","title","body","s_id"]
+        missing = json_validate(validate)
+        if missing:
+            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+        
         check_query = "SELECT userid FROM notes WHERE userid = %s"
         params = (userid,)
         user_exists = execute_query(check_query,userid, fetch=True, get_one=True)
@@ -279,6 +354,15 @@ def delete_note():
     try:
         s_id = request.json.get('s_id')
         userid = request.json.get('userid')
+        validate = ["s_id","userid"]
+        missing = json_validate(validate)
+        if missing:
+            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+        check_query = "SELECT userid FROM notes WHERE userid = %s"
+        params = (userid,)
+        user_exists = execute_query(check_query,userid, fetch=True, get_one=True)
+        if not user_exists:
+            return jsonify({"status_code": 404, "status": "User not found"})
         query = "DELETE FROM notes WHERE s_id = %s AND userid = %s"
         params = (s_id,userid)
         execute_query(query,params)
@@ -290,12 +374,12 @@ def delete_note():
 @app.route('/user/<int:userid>/details', methods=['GET'])
 def user_details(userid: int):
     try:
-        user_query = "SELECT userid, name, email FROM users WHERE userid = %s"
+        user_query = "SELECT userid, name, email FROM user_table WHERE userid = %s"
         user = execute_query(user_query, (userid,), fetch=True, get_one=True, as_dict=True)
         if not user:
             return jsonify({"status_code": 404, "status": "User not found"}), 404
 
-        tasks_query = "SELECT title, description, due_date, priority, status FROM tasks WHERE userid = %s"
+        tasks_query = "SELECT title, description, due_date, priority, status FROM task WHERE userid = %s"
         user_tasks = execute_query(tasks_query, (userid,), fetch=True, as_dict=True)
 
         notes_query = "SELECT title, body FROM notes WHERE userid = %s"
@@ -316,14 +400,14 @@ def user_details(userid: int):
 @app.route('/alluser_details', methods=['GET'])
 def alluser_details():
     try:
-        users_query = "SELECT userid, name, email FROM users"
+        users_query = "SELECT userid, name, email FROM user_table"
         users = execute_query(users_query, fetch=True, as_dict=True)
         if not users:
             return jsonify({"status_code": 404, "status": "No users found"}), 404
 
         result = []
         for user in users:
-            tasks_query = "SELECT title, description, due_date, priority, status FROM tasks WHERE userid = %s"
+            tasks_query = "SELECT title, description, due_date, priority, status FROM task WHERE userid = %s"
             user_tasks = execute_query(tasks_query, (user['userid'],), fetch=True, as_dict=True)
 
             notes_query = "SELECT title, body FROM notes WHERE userid = %s"
@@ -342,5 +426,5 @@ def alluser_details():
     except Exception as e:
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"}), 500
 
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0",debug=True, port=5000)
