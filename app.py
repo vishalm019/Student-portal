@@ -63,8 +63,8 @@ def login():
     print(result)
     if result is None:
         return jsonify({"status_code":500,"status": "Invalid credentials"})
-    access_token = create_access_token(identity=result)
-    refresh_token = create_refresh_token(identity=result)   
+    access_token = create_access_token(identity=result[0])
+    refresh_token = create_refresh_token(identity=result[0])   
     return jsonify({"status": "success", "token": access_token,"refresh_token":refresh_token})
 
 
@@ -73,23 +73,30 @@ def login():
 @jwt_required()
 def insert_user():
     try:
+        userid = request.json.get('userid')
         name = request.json.get('name')
         email = request.json.get('email')
+        user_type = request.json.get('user_type')
         pwd = ''.join(random.choices(string.ascii_letters, k=5))
 
-        validate = ["name","email"]
+        validate = ["name","email","userid"]
         missing = json_validate(validate)
         if missing:
             return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
         
-        query = "INSERT INTO user_table (name, email, password) VALUES (%s, %s, %s) RETURNING userid"
-        params = (name,email,pwd,)
+        chck = """SELECT user_type FROM user_table WHERE userid = %s"""
+        params = (userid,)
+        verify = execute_query(chck,params,fetch=True,get_one=True)
+        if verify is None:
+            return jsonify({'status_code':500,'status':'Invalid userid'})
+        if verify[0] != 'A':
+            return jsonify({'status_code':403,'status':'Forbidden access'})
+        query = "INSERT INTO user_table (name, email, password,user_type) VALUES (%s, %s, %s,%s) RETURNING userid"
+        params = (name,email,pwd,user_type)
         result = execute_query(query, params, fetch=True, get_one=True, as_dict=False)
         print(result,'result')
-        if result != []:
+        if result is not None:
             return jsonify({"status_code": 200, "status": "User added", "userid": result[0]})
-        else:   
-            return jsonify({"status_code": 500, "status": "Failed to add user"})
     except Exception as e:
         return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
 
