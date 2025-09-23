@@ -125,11 +125,13 @@ def update_user():
         missing = json_validate(validate)
         if missing:
             return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
-        check_query = "SELECT userid FROM user_table WHERE userid = %s"
+        chck = """SELECT user_type FROM user_table WHERE userid = %s"""
         params = (userid,)
-        user_exists = execute_query(check_query,params,fetch=True,get_one=True)
-        if not user_exists:
-            return jsonify({"status_code": 404, "status": "User not found"})
+        verify = execute_query(chck,params,fetch=True,get_one=True)
+        if verify is None:
+            return jsonify({'status_code':500,'status':'Invalid userid'})
+        if verify[0] != 'A':
+            return jsonify({'status_code':403,'status':'Forbidden access'})
         query = "UPDATE user_table SET name = %s, email = %s,password = %s WHERE userid = %s"
         params = (name,email,password,userid,)
         execute_query(query, params)
@@ -147,11 +149,13 @@ def delete_user():
         if missing:
             return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
         
-        check_query = "SELECT userid FROM user_table WHERE userid = %s"
+        chck = """SELECT user_type FROM user_table WHERE userid = %s"""
         params = (userid,)
-        user_exists = execute_query(check_query,params, fetch=True, get_one=True)
-        if not user_exists:
-            return jsonify({"status_code": 404, "status": "User not found"})
+        verify = execute_query(chck,params,fetch=True,get_one=True)
+        if verify is None:
+            return jsonify({'status_code':500,'status':'Invalid userid'})
+        if verify[0] != 'A':
+            return jsonify({'status_code':403,'status':'Forbidden access'})
         query2 = "DELETE FROM task WHERE userid = %s"
         params = (userid,)
         execute_query(query2,params)
@@ -177,11 +181,13 @@ def add_task():
         if missing:
             return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
         
-        user_exists_query = "SELECT userid FROM user_table WHERE userid = %s"
+        chck = """SELECT user_type FROM user_table WHERE userid = %s"""
         params = (userid,)
-        user_exists = execute_query(user_exists_query,params, fetch=True, get_one=True)
-        if not user_exists:
-            return jsonify({"status_code": 404, "status": "User not found"})
+        verify = execute_query(chck,params,fetch=True,get_one=True)
+        if verify is None:
+            return jsonify({'status_code':500,'status':'Invalid userid'})
+        if verify[0] != 'A':
+            return jsonify({'status_code':403,'status':'Forbidden access'})
         query = "INSERT INTO task (userid, title, description, due_date, priority, status) VALUES (%s, %s, %s, %s, %s, %s)"
         params = (userid,title,description,due_date,priority,status)
         execute_query(query, params)
@@ -231,11 +237,13 @@ def all_tasks():
         missing = json_validate(validate)
         if missing:
             return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
-        user_exists_query = "SELECT userid FROM user_table WHERE userid = %s"
+        chck = """SELECT user_type FROM user_table WHERE userid = %s"""
         params = (userid,)
-        user_exists = execute_query(user_exists_query,params, fetch=True, get_one=True)
-        if not user_exists:
-            return jsonify({"status_code": 404, "status": "User not found"})
+        verify = execute_query(chck,params,fetch=True,get_one=True)
+        if verify is None:
+            return jsonify({'status_code':500,'status':'Invalid userid'})
+        if verify[0] != 'A':
+            return jsonify({'status_code':403,'status':'Forbidden access'})
         query = "SELECT task_id, title, description, priority, status, due_date FROM task WHERE 1=1"
         params = []
         if priority:
@@ -278,11 +286,13 @@ def edit_task():
         if missing:
             return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
         
-        check_query = "SELECT userid FROM user_table WHERE userid = %s"
+        chck = """SELECT user_type FROM user_table WHERE userid = %s"""
         params = (userid,)
-        user_exists = execute_query(check_query,params, fetch=True, get_one=True)
-        if not user_exists:
-            return jsonify({"status_code": 404, "status": "User not found"})
+        verify = execute_query(chck,params,fetch=True,get_one=True)
+        if verify is None:
+            return jsonify({'status_code':500,'status':'Invalid userid'})
+        if verify[0] != 'A':
+            return jsonify({'status_code':403,'status':'Forbidden access'})
         
         query = "UPDATE task SET title = %s, description = %s, due_date = %s, priority = %s, status = %s WHERE task_id = %s AND userid = %s"
         params = (title,description,due_date,priority,status,task_id,userid)
@@ -295,12 +305,20 @@ def edit_task():
 @jwt_required()
 def delete_task():
     try:
+        userid = request.json.get('userid')
         taskid = request.json.get('taskid')
         validate = ["taskid"]
         missing = json_validate(validate)
         if missing:
             return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
-        
+        chck = """SELECT user_type FROM user_table WHERE userid = %s"""
+        params = (userid,)
+        verify = execute_query(chck,params,fetch=True,get_one=True)
+        if verify is None:
+            return jsonify({'status_code':500,'status':'Invalid userid'})
+        if verify[0] != 'A':
+            return jsonify({'status_code':403,'status':'Forbidden access'})
+
         query = "DELETE FROM task WHERE task_id = %s"
         params = (taskid,)
         execute_query(query,params)
@@ -421,6 +439,18 @@ def delete_note():
 @jwt_required()
 def user_details(userid: int):
     try:
+        userid = request.json.get('userid')
+        validate = ["userid"]
+        missing = json_validate(validate)
+        if missing:
+            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+        chck = """SELECT user_type FROM user_table WHERE userid = %s"""
+        params = (userid,)
+        verify = execute_query(chck,params,fetch=True,get_one=True)
+        if verify is None:
+            return jsonify({'status_code':500,'status':'Invalid userid'})
+        if verify[0] != 'A':
+            return jsonify({'status_code':403,'status':'Forbidden access'})
         user_query = "SELECT userid, name, email FROM user_table WHERE userid = %s"
         user = execute_query(user_query, (userid,), fetch=True, get_one=True, as_dict=True)
         if not user:
@@ -448,6 +478,19 @@ def user_details(userid: int):
 @jwt_required()
 def alluser_details():
     try:
+        userid = request.json.get('userid')
+        validate = ["userid"]
+        missing = json_validate(validate)
+        if missing:
+            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+        chck = """SELECT user_type FROM user_table WHERE userid = %s"""
+        params = (userid,)
+        verify = execute_query(chck,params,fetch=True,get_one=True)
+        if verify is None:
+            return jsonify({'status_code':500,'status':'Invalid userid'})
+        if verify[0] != 'A':
+            return jsonify({'status_code':403,'status':'Forbidden access'})
+
         users_query = "SELECT userid, name, email FROM user_table"
         users = execute_query(users_query, fetch=True, as_dict=True)
         if not users:
