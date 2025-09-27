@@ -1,7 +1,7 @@
 import psycopg2
 
 DB_CONFIG = {
-    'dbname': 'devboard',
+    'dbname': 'student_portal',
     'user': 'postgres',
     'password': 'hello123019',
     'host': 'host.docker.internal',
