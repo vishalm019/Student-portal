@@ -129,7 +129,7 @@ The API will be available at:
     CMD ["python", "app.py", "--host", "0.0.0.0", "--port", "5000"]
 
 
-# Notes:
+### Notes:
 
  - host 0.0.0.0 makes the app accessible outside the container.
 
