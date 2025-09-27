@@ -128,21 +128,14 @@ The API will be available at:
     # Command to run the Flask app
     CMD ["python", "app.py", "--host", "0.0.0.0", "--port", "5000"]
 
-    Notes:
-
-    --host 0.0.0.0 makes the app accessible outside the container.
-
-    --port 5000 exposes Flask on port 5000.
-
-    Using --no-cache-dir in pip avoids extra cache files in the container.
 
 Notes:
 
-    -host 0.0.0.0 makes the app accessible outside the container.
+host 0.0.0.0 makes the app accessible outside the container.
 
-    -port 5000 exposes Flask on port 5000.
+port 5000 exposes Flask on port 5000.
 
-    -no-cache-dir avoids extra pip cache files in the container.
+no-cache-dir avoids extra pip cache files in the container.
 
 ## 2. Build the Docker image
 
