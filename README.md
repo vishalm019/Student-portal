@@ -46,7 +46,7 @@ API Endpoints:
 | Notes    | GET    | /all_notes                               | Fetch all notes                             | Admin         |
 | Notes    | POST   | /edit_notes                              | Edit notes                                  | JWT           |
 | Notes    | POST   | /delete_note                             | Delete note                                 | JWT           |
-| Combined | GET    | /user/[int:user_id](int:user_id)`/details | Fetch a user's details with tasks + notes   | JWT           |
+| Combined | GET    | `/user/[int:user_id](int:user_id)/details` | Fetch a user's details with tasks + notes   | JWT           |
 | Combined | GET    | /alluser_details                         | Fetch all users’ details with tasks + notes | Admin         |
 
 ## Setup (Run Locally)
