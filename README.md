@@ -1,8 +1,8 @@
-Student Portal API
+# Student Portal API
 
 ## Overview
 
-This is a REST API built with ** Flask ** and ** PostgreSQL ** for a Student Portal.
+This is a REST API built with *** Flask *** and PostgreSQL for a Student Portal.
 It handles JWT-based authentication, admin/user role-based access control, and CRUD operations for users, tasks, notes, plus combined endpoints for analytics.
 
 It’s designed to be Docker-ready and deployable on AWS EBS/EC2 (optional).
@@ -112,7 +112,7 @@ python app.py
 ```
 The API will be available at:
 
-``` http://localhost:5000 ```
+```http://localhost:5000 ```
 
 # Docker Deployment
 
