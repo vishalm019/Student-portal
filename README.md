@@ -97,6 +97,12 @@ Open db_config.py and update DB_CONFIG:
 
 If PostgreSQL is running in a separate Docker container, make sure both containers share a Docker network.
 
+### Link to PostgreSQL:
+
+- Local DB: use localhost (or host.docker.internal if inside Docker).
+
+- Separate container DB: connect both containers via a Docker network.
+
 ## 4. Run the app locally
 
 ``` bash
@@ -172,13 +178,8 @@ The API will be available at:
 
 ```   http://localhost:5000 ```
 
-## 3. Link to PostgreSQL
 
-- Local DB: use localhost (or host.docker.internal if inside Docker).
-
-- Separate container DB: connect both containers via a Docker network.
-
-# Postman Collection
+### Postman Collection
 
 You can import the Postman collection from:
 
