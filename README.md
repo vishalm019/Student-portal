@@ -135,7 +135,7 @@ The API will be available at:
 
  - port 5000 exposes Flask on port 5000.
 
- -no-cache-dir avoids extra pip cache files in the container.
+ - no-cache-dir avoids extra pip cache files in the container.
 
 ## 2. Build the Docker image
 
