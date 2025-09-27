@@ -7,7 +7,7 @@ from db_config import DB_CONFIG
 import string
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt,create_refresh_token
 from functools import wraps
-
+from werkzeug.security import generate_password_hash,check_password_hash
 app = Flask(__name__)
 app.secret_key = 'my_key'
 app.config["JWT_SECRET_KEY"] = 'my_jwt_secret_key'
@@ -53,16 +53,33 @@ def refresh():
     new_access_token = create_access_token(identity=identity)
     return {"access_token": new_access_token}
 
+@app.route('/admin_login', methods=['POST'])
+def admin_login():
+    username = request.json.get('username')
+    password = request.json.get('password')
+    query = "SELECT userid,password FROM user_table WHERE email = %s AND password = %s"
+    params = (username,password,)
+    result = execute_query(query,params, fetch=True, get_one=True)
+    print(result)
+    if result is None:
+        return jsonify({"status": "Invalid credentials"}),500
+    access_token = create_access_token(identity=result[0])
+    refresh_token = create_refresh_token(identity=result[0])   
+    return jsonify({"status": "success", "token": access_token,"refresh_token":refresh_token})
+
 @app.route('/login', methods=['POST'])
 def login():
     username = request.json.get('username')
     password = request.json.get('password')
-    query = "SELECT email FROM user_table WHERE email = %s AND password = %s"
-    params = (username,password)
+    query = "SELECT userid,password FROM user_table WHERE email = %s"
+    params = (username,)
     result = execute_query(query,params, fetch=True, get_one=True)
     print(result)
+    if not result or not check_password_hash(result[1], password):
+        return jsonify({"status": "Invalid credentials"}), 401
+    print(result)
     if result is None:
-        return jsonify({"status_code":500,"status": "Invalid credentials"})
+        return jsonify({"status": "Invalid credentials"}),500
     access_token = create_access_token(identity=result[0])
     refresh_token = create_refresh_token(identity=result[0])   
     return jsonify({"status": "success", "token": access_token,"refresh_token":refresh_token})
@@ -73,16 +90,17 @@ def login():
 @jwt_required()
 def insert_user():
     try:
-        userid = request.json.get('userid')
+        userid = get_jwt_identity()
         name = request.json.get('name')
         email = request.json.get('email')
         user_type = request.json.get('user_type')
         pwd = ''.join(random.choices(string.ascii_letters, k=5))
-
-        validate = ["name","email","userid"]
+        print(userid,'userid')
+        hashed_pwd = generate_password_hash(pwd)
+        validate = ["name","email"]
         missing = json_validate(validate)
         if missing:
-            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+            return jsonify({'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)}),400
         
         chck = """SELECT user_type FROM user_table WHERE userid = %s"""
         params = (userid,)
@@ -90,15 +108,15 @@ def insert_user():
         if verify is None:
             return jsonify({'status_code':500,'status':'Invalid userid'})
         if verify[0] != 'A':
-            return jsonify({'status_code':403,'status':'Forbidden access'})
+            return jsonify({'status':'Forbidden access'}),403
         query = "INSERT INTO user_table (name, email, password,user_type) VALUES (%s, %s, %s,%s) RETURNING userid"
-        params = (name,email,pwd,user_type)
+        params = (name,email,hashed_pwd,user_type)
         result = execute_query(query, params, fetch=True, get_one=True, as_dict=False)
         print(result,'result')
         if result is not None:
-            return jsonify({"status_code": 200, "status": "User added", "userid": result[0]})
+            return jsonify({"status": "User added", "userid": result[0],"password":pwd})
     except Exception as e:
-        return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
 @app.route('/get_users', methods=['GET'])
 @jwt_required()
@@ -111,106 +129,116 @@ def get_users():
             dummy.append(i)
         return jsonify({"status": "Users fetched", "data": dummy})
     except Exception as e:
-        return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
 @app.route('/update_user', methods=['POST'])
 @jwt_required()
 def update_user():
     try:
-        userid = request.json.get('userid')
+        userid = get_jwt_identity()
+        of_user = request.json.get('of_user')
         name = request.json.get('name')
         email = request.json.get('email')
         password = request.json.get('password')
-        validate = ["name","email","userid","password"]
+        validate = ["name","email","password"]
         missing = json_validate(validate)
         if missing:
-            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+            return jsonify({'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)}),400
+        hashed_pwd = generate_password_hash(password)
+        params = (name, email, hashed_pwd, userid)
+
         chck = """SELECT user_type FROM user_table WHERE userid = %s"""
         params = (userid,)
         verify = execute_query(chck,params,fetch=True,get_one=True)
         if verify is None:
             return jsonify({'status_code':500,'status':'Invalid userid'})
         if verify[0] != 'A':
-            return jsonify({'status_code':403,'status':'Forbidden access'})
+            return jsonify({'status':'Forbidden access'}),403
         query = "UPDATE user_table SET name = %s, email = %s,password = %s WHERE userid = %s"
-        params = (name,email,password,userid,)
+        params = (name,email,hashed_pwd,of_user,)
         execute_query(query, params)
         return jsonify({"status_code":200,"status": "User updated successfully"})
     except Exception as e:
-        return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
 @app.route('/delete_user', methods=['POST'])
 @jwt_required()
 def delete_user():
     try:
-        userid = request.json.get('userid')
-        validate = ["userid"]
+        userid = get_jwt_identity()
+        delete_id = request.json.get('delete_id')
+        validate = ["delete_id"]
         missing = json_validate(validate)
         if missing:
-            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
-        
+            return jsonify({'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)}),400
         chck = """SELECT user_type FROM user_table WHERE userid = %s"""
         params = (userid,)
         verify = execute_query(chck,params,fetch=True,get_one=True)
         if verify is None:
             return jsonify({'status_code':500,'status':'Invalid userid'})
         if verify[0] != 'A':
-            return jsonify({'status_code':403,'status':'Forbidden access'})
+            return jsonify({'status':'Forbidden access'}),403
         query2 = "DELETE FROM task WHERE userid = %s"
-        params = (userid,)
+        params = (delete_id,)
         execute_query(query2,params)
         query = "DELETE FROM user_table WHERE userid = %s"
         execute_query(query,params)
         return jsonify({"status_code":200,"status": "User deleted successfully"})
     except Exception as e:
-        return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
 # Task Endpoints
 @app.route('/add_task', methods=['POST'])
 @jwt_required()
 def add_task():
     try:
-        userid = request.json.get('userid')
+        userid = get_jwt_identity()
+        to_user = request.json.get('to_user')
         title = request.json.get('title')
         description = request.json.get('description')
         due_date = request.json.get('due_date')
         priority = request.json.get('priority')
         status = request.json.get('status')
-        validate = ["userid","title","description","due_date","priority","status"]
+        validate = ["to_user","title","description","due_date","priority","status"]
         missing = json_validate(validate)
         if missing:
-            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
-        
+            return jsonify({'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)}),400
+        chck = """SELECT user_type FROM user_table WHERE userid = %s"""
+        params = (to_user,)
+        verify = execute_query(chck,params,fetch=True,get_one=True)
+        if verify is None:
+            return jsonify({'status_code':500,'status':'Invalid to_user'})
         chck = """SELECT user_type FROM user_table WHERE userid = %s"""
         params = (userid,)
         verify = execute_query(chck,params,fetch=True,get_one=True)
         if verify is None:
             return jsonify({'status_code':500,'status':'Invalid userid'})
         if verify[0] != 'A':
-            return jsonify({'status_code':403,'status':'Forbidden access'})
+            return jsonify({'status':'Forbidden access'}),403
         query = "INSERT INTO task (userid, title, description, due_date, priority, status) VALUES (%s, %s, %s, %s, %s, %s)"
-        params = (userid,title,description,due_date,priority,status)
+        params = (to_user,title,description,due_date,priority,status)
         execute_query(query, params)
         return jsonify({"status": "Successfully added task"})
     except Exception as e:
-        return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
 @app.route('/get_task', methods=['POST'])
 @jwt_required()
 def get_task():
     try:
-        userid = request.json.get('userid')
-        validate = ["userid"]
+        userid = get_jwt_identity()
+        user = request.json.get('user')
+        validate = ["user"]
         missing = json_validate(validate)
         if missing:
-            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+            return jsonify({'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)}),400
         user_exists_query = "SELECT userid FROM user_table WHERE userid = %s"
-        params = (userid,)
+        params = (user,)
         user_exists = execute_query(user_exists_query,params, fetch=True, get_one=True)
         if not user_exists:
-            return jsonify({"status_code": 404, "status": "User not found"})
+            return jsonify({"status": "User not found"}),404
         query = "SELECT task_id, title, description, priority, status, due_date FROM task WHERE userid = %s"
-        params = (userid,)
+        params = (user,)
         tasks = execute_query(query,params, fetch=True, as_dict=True)
         if not tasks:
             return jsonify({"status_code": 404, "status": "Task data does not exist"})
@@ -221,29 +249,25 @@ def get_task():
             
         return jsonify({"status": "Successfully fetched tasks", "details": tasks})
     except Exception as e:
-        return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
 @app.route('/all_tasks', methods=['GET'])
 @jwt_required()
 def all_tasks():
     try:
-        priority = request.json.get('priority')
-        status = request.json.get('status')
-        due_date = request.json.get('due_date')
-        description = request.json.get('description')
-        title = request.json.get('title')
-        userid = request.json.get('userid')
-        validate = ["userid"]
-        missing = json_validate(validate)
-        if missing:
-            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+        priority = request.args.get('priority')
+        status = request.args.get('status')
+        due_date = request.args.get('due_date')
+        description = request.args.get('description')
+        title = request.args.get('title')
+        userid = get_jwt_identity()
         chck = """SELECT user_type FROM user_table WHERE userid = %s"""
         params = (userid,)
         verify = execute_query(chck,params,fetch=True,get_one=True)
         if verify is None:
             return jsonify({'status_code':500,'status':'Invalid userid'})
         if verify[0] != 'A':
-            return jsonify({'status_code':403,'status':'Forbidden access'})
+            return jsonify({'status':'Forbidden access'}),403
         query = "SELECT task_id, title, description, priority, status, due_date FROM task WHERE 1=1"
         params = []
         if priority:
@@ -257,7 +281,7 @@ def all_tasks():
             params.append(due_date)
         if description:
             query += " AND description = %s"
-            params = (description)
+            params.append(description)
         if title:
             query += "AND title = %s"
             params.append(title)
@@ -268,111 +292,102 @@ def all_tasks():
         
         return jsonify({"status": "Successfully fetched tasks", "details": tasks})
     except Exception as e:
-        return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
 @app.route('/edit_task', methods=['POST'])
 @jwt_required()
 def edit_task():
     try:
-        userid = request.json.get('userid')
-        priority = request.json.get('priority')
-        status = request.json.get('status')
-        due_date = request.json.get('due_date')
-        description = request.json.get('description')
-        title = request.json.get('title')
+        userid = get_jwt_identity()
         task_id = request.json.get('task_id')
-        validate = ["userid"]
-        missing = json_validate(validate)
-        if missing:
-            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
         
+        payload = request.get_json()
         chck = """SELECT user_type FROM user_table WHERE userid = %s"""
         params = (userid,)
         verify = execute_query(chck,params,fetch=True,get_one=True)
         if verify is None:
             return jsonify({'status_code':500,'status':'Invalid userid'})
-        if verify[0] != 'A':
-            return jsonify({'status_code':403,'status':'Forbidden access'})
-        
-        query = "UPDATE task SET title = %s, description = %s, due_date = %s, priority = %s, status = %s WHERE task_id = %s AND userid = %s"
-        params = (title,description,due_date,priority,status,task_id,userid)
+        new_payload = {i:k for i,k in payload.items() if i != 'task_id' and k not in [None,""]}
+        update = ", ".join([f"{k} = %s" for k in new_payload.keys()])
+        query = "UPDATE task SET {update} WHERE task_id = %s".format(update=update)
+        params = list(new_payload.values()) + [task_id]
         execute_query(query, params)
-        return jsonify({"status": "Successfully updated task"})
+        return jsonify({"status": "Successfully updated task"}),200
     except Exception as e:
-        return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
 @app.route('/delete_task', methods=['POST'])
 @jwt_required()
 def delete_task():
     try:
-        userid = request.json.get('userid')
+        userid = get_jwt_identity()
         taskid = request.json.get('taskid')
         validate = ["taskid"]
         missing = json_validate(validate)
         if missing:
-            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+            return jsonify({'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)}),400
         chck = """SELECT user_type FROM user_table WHERE userid = %s"""
         params = (userid,)
         verify = execute_query(chck,params,fetch=True,get_one=True)
         if verify is None:
             return jsonify({'status_code':500,'status':'Invalid userid'})
         if verify[0] != 'A':
-            return jsonify({'status_code':403,'status':'Forbidden access'})
+            return jsonify({'status':'Forbidden access'}),403
 
         query = "DELETE FROM task WHERE task_id = %s"
         params = (taskid,)
         execute_query(query,params)
-        return jsonify({"status_code": 200, "status": "Successfully deleted task"})
+        return jsonify({"status": "Successfully deleted task"}),200
     except Exception as e:
-        return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
 # Notes Endpoints
 @app.route('/add_notes', methods=['POST'])
 @jwt_required()
 def add_notes():
     try:
-        userid = request.json.get('userid')
+        to_user = request.json.get('to_user')
         title = request.json.get('title')
         body = request.json.get('body')
-        validate = ["userid","title","body"]
+        validate = ["title","body","to_user"]
         missing = json_validate(validate)
         if missing:
-            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+            return jsonify({'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)}),400
         
         user_exists_query = "SELECT userid FROM user_table WHERE userid = %s"
-        params = (userid,)
+        params = (to_user,)
         user_exists = execute_query(user_exists_query,params, fetch=True, get_one=True)
         if not user_exists:
-            return jsonify({"status_code": 404, "status": "User not found"})
+            return jsonify({"status": "User not found"}),404
         
         query = "INSERT INTO notes (userid, title, body) VALUES (%s, %s, %s)"
-        params = (userid,title,body,)
+        params = (to_user,title,body,)
         execute_query(query, params)
-        return jsonify({"status_code": 200, "status": "Successfully added notes"})
+        return jsonify({"status": "Successfully added notes"}),200
     except Exception as e:
-        return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
 @app.route('/get_notes', methods=['GET'])
 @jwt_required()
 def get_notes():
     try:
-        userid = request.json.get('userid')
+        of_user = request.json.get('of_user')
         s_id = request.json.get('s_id') 
-        validate = ["userid","s_id"]
+        validate = ["s_id","of_user"]
         dummy = []
         missing = json_validate(validate)
         if missing: 
-            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+            return jsonify({'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)}),400
         query = "SELECT title, body FROM notes WHERE s_id = %s AND userid = %s"
-        params = (s_id,userid,)
+        params = (s_id,of_user,)
         note = execute_query(query,params, fetch=True, as_dict=True)
         if not note:
             return jsonify({"status_code": 404, "status": "Notes data does not exist"})
         for i in note:
             dummy.append(i)
-        return jsonify({"status_code": 200, "status": "Successfully fetched notes", "details":dummy})
+        return jsonify({"status": "Successfully fetched notes", "details":dummy}),200
     except Exception as e:
-        return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
 @app.route('/all_notes', methods=['GET'])
 @jwt_required()
@@ -384,77 +399,62 @@ def all_notes():
             return jsonify({"status_code": 404, "status": "Notes data does not exist"})
         return jsonify({"status": "Successfully fetched Notes", "details": notes})
     except Exception as e:
-        return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"}), 500
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500, 500
 
 @app.route('/edit_notes', methods=['POST'])
 @jwt_required()
 def edit_notes():
     try:
-        userid = request.json.get('userid')
+        userid = get_jwt_identity()
         title = request.json.get('title')
         body = request.json.get('body')
         s_id = request.json.get('s_id')
-        validate = ["userid","title","body","s_id"]
+        validate = ["title","body","s_id"]
         missing = json_validate(validate)
         if missing:
-            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
-        
-        check_query = "SELECT userid FROM notes WHERE userid = %s"
-        params = (userid,)
-        user_exists = execute_query(check_query,userid, fetch=True, get_one=True)
-        if not user_exists:
-            return jsonify({"status_code": 404, "status": "User not found"})
+            return jsonify({'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)}),400
         
         query = "UPDATE notes SET title = %s, body = %s WHERE s_id = %s AND userid = %s"
         params = (title,body,s_id,userid)
         execute_query(query, params)
         return jsonify({"status": "Successfully updated notes"})
     except Exception as e:
-        return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
 @app.route('/delete_note', methods=['POST'])
 @jwt_required()
 def delete_note():
     try:
         s_id = request.json.get('s_id')
-        userid = request.json.get('userid')
-        validate = ["s_id","userid"]
+        userid = get_jwt_identity()
+        validate = ["s_id"]
         missing = json_validate(validate)
         if missing:
-            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
-        check_query = "SELECT userid FROM notes WHERE userid = %s"
-        params = (userid,)
-        user_exists = execute_query(check_query,userid, fetch=True, get_one=True)
-        if not user_exists:
-            return jsonify({"status_code": 404, "status": "User not found"})
+            return jsonify({'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)}),400
         query = "DELETE FROM notes WHERE s_id = %s AND userid = %s"
         params = (s_id,userid)
         execute_query(query,params)
-        return jsonify({"status_code": 200, "status": "Successfully deleted Note"})
+        return jsonify({"status": "Successfully deleted Note"}),200
     except Exception as e:
-        return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"})
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
 # Combined Endpoints
 @app.route('/user/<int:userid>/details', methods=['GET'])
 @jwt_required()
 def user_details(userid: int):
     try:
-        userid = request.json.get('userid')
-        validate = ["userid"]
-        missing = json_validate(validate)
-        if missing:
-            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+        userid = get_jwt_identity()
         chck = """SELECT user_type FROM user_table WHERE userid = %s"""
         params = (userid,)
         verify = execute_query(chck,params,fetch=True,get_one=True)
         if verify is None:
             return jsonify({'status_code':500,'status':'Invalid userid'})
         if verify[0] != 'A':
-            return jsonify({'status_code':403,'status':'Forbidden access'})
+            return jsonify({'status':'Forbidden access'}),403
         user_query = "SELECT userid, name, email FROM user_table WHERE userid = %s"
         user = execute_query(user_query, (userid,), fetch=True, get_one=True, as_dict=True)
         if not user:
-            return jsonify({"status_code": 404, "status": "User not found"}), 404
+            return jsonify({"status": "User not found"}),404, 404
 
         tasks_query = "SELECT title, description, due_date, priority, status FROM task WHERE userid = %s"
         user_tasks = execute_query(tasks_query, (userid,), fetch=True, as_dict=True)
@@ -470,26 +470,22 @@ def user_details(userid: int):
         user['tasks'] = user_tasks
         user['notes'] = user_notes
         
-        return jsonify({"status_code": 200, "status": "User details fetched successfully", "details": user})
+        return jsonify({"status": "User details fetched successfully", "details": user}),200
     except Exception as e:
-        return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"}), 500
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500, 500
 
 @app.route('/alluser_details', methods=['GET'])
 @jwt_required()
 def alluser_details():
     try:
-        userid = request.json.get('userid')
-        validate = ["userid"]
-        missing = json_validate(validate)
-        if missing:
-            return jsonify({'status_code': 400,'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)})
+        userid = get_jwt_identity()
         chck = """SELECT user_type FROM user_table WHERE userid = %s"""
         params = (userid,)
         verify = execute_query(chck,params,fetch=True,get_one=True)
         if verify is None:
             return jsonify({'status_code':500,'status':'Invalid userid'})
         if verify[0] != 'A':
-            return jsonify({'status_code':403,'status':'Forbidden access'})
+            return jsonify({'status':'Forbidden access'}),403
 
         users_query = "SELECT userid, name, email FROM user_table"
         users = execute_query(users_query, fetch=True, as_dict=True)
@@ -513,9 +509,9 @@ def alluser_details():
             user['notes'] = user_notes
             result.append(user)
             
-        return jsonify({"status_code": 200, "status": "User details fetched successfully", "details": result})
+        return jsonify({"status": "User details fetched successfully", "details": result}),200
     except Exception as e:
-        return jsonify({"status_code": 500, "status": f"Internal server error: {str(e)}"}), 500
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500, 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0",debug=True, port=5000)
