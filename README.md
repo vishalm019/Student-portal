@@ -106,11 +106,45 @@ python app.py
 ```
 The API will be available at:
 
-http://localhost:5000
+``` http://localhost:5000 ```
 
 # Docker Deployment
 
-## 1. Build the Docker image
+## 1. Dockerfile:
+
+    # Use a lightweight Python image
+    FROM python:3.11-slim
+
+    # Set working directory
+    WORKDIR /app
+
+    # Copy requirements and install dependencies
+    COPY requirements.txt .
+    RUN pip install --no-cache-dir -r requirements.txt
+
+    # Copy all project files into the container
+    COPY . .
+
+    # Command to run the Flask app
+    CMD ["python", "app.py", "--host", "0.0.0.0", "--port", "5000"]
+
+    Notes:
+
+    --host 0.0.0.0 makes the app accessible outside the container.
+
+    --port 5000 exposes Flask on port 5000.
+
+    Using --no-cache-dir in pip avoids extra cache files in the container.
+
+Notes:
+
+--host 0.0.0.0 makes the app accessible outside the container.
+
+--port 5000 exposes Flask on port 5000.
+
+--no-cache-dir avoids extra pip cache files in the container.
+
+## 2. Build the Docker image
 
 ``` bash
 
@@ -118,7 +152,7 @@ docker build -t student-portal .
 
 ```
 
-## 2. Run the container
+## 3. Run the container
 
 Production-style (stable, no auto-reload):
 
@@ -143,7 +177,7 @@ debug=True enables auto-reload when files change.
 
 The API will be available at:
 
-```http://localhost:5000 ```
+```   http://localhost:5000 ```
 
 ## 3. Link to PostgreSQL
 
