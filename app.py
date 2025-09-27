@@ -28,7 +28,6 @@ def execute_query(query, params=None, fetch=False, get_one=False, as_dict=False)
     cursor_factory = RealDictCursor if as_dict else None
     cur = conn.cursor(cursor_factory=cursor_factory)
     try:
-        print(query,params)
         cur.execute(query, params)
         conn.commit()
         if fetch:
@@ -60,7 +59,6 @@ def admin_login():
     query = "SELECT userid,password FROM user_table WHERE email = %s AND password = %s"
     params = (username,password,)
     result = execute_query(query,params, fetch=True, get_one=True)
-    print(result)
     if result is None:
         return jsonify({"status": "Invalid credentials"}),500
     access_token = create_access_token(identity=result[0])
@@ -74,10 +72,8 @@ def login():
     query = "SELECT userid,password FROM user_table WHERE email = %s"
     params = (username,)
     result = execute_query(query,params, fetch=True, get_one=True)
-    print(result)
     if not result or not check_password_hash(result[1], password):
         return jsonify({"status": "Invalid credentials"}), 401
-    print(result)
     if result is None:
         return jsonify({"status": "Invalid credentials"}),500
     access_token = create_access_token(identity=result[0])
@@ -112,7 +108,6 @@ def insert_user():
         query = "INSERT INTO user_table (name, email, password,user_type) VALUES (%s, %s, %s,%s) RETURNING userid"
         params = (name,email,hashed_pwd,user_type)
         result = execute_query(query, params, fetch=True, get_one=True, as_dict=False)
-        print(result,'result')
         if result is not None:
             return jsonify({"status": "User added", "userid": result[0],"password":pwd})
     except Exception as e:
@@ -140,12 +135,12 @@ def update_user():
         name = request.json.get('name')
         email = request.json.get('email')
         password = request.json.get('password')
-        validate = ["name","email","password"]
+        payload = request.get_json()
+        validate = ["of_user"]
         missing = json_validate(validate)
         if missing:
             return jsonify({'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)}),400
-        hashed_pwd = generate_password_hash(password)
-        params = (name, email, hashed_pwd, userid)
+        
 
         chck = """SELECT user_type FROM user_table WHERE userid = %s"""
         params = (userid,)
@@ -154,9 +149,14 @@ def update_user():
             return jsonify({'status_code':500,'status':'Invalid userid'})
         if verify[0] != 'A':
             return jsonify({'status':'Forbidden access'}),403
-        query = "UPDATE user_table SET name = %s, email = %s,password = %s WHERE userid = %s"
-        params = (name,email,hashed_pwd,of_user,)
-        execute_query(query, params)
+        new_payload = {i:k for i,k in payload.items() if i != 'of_user' and k not in [None,""]}
+        if new_payload['password']:
+            hashed_pwd = generate_password_hash(password)
+            new_payload['password'] = hashed_pwd
+        update = ", ".join([f"{k} = %s" for k in new_payload.keys()])
+        query = "UPDATE user_table SET {update} WHERE userid = %s".format(update=update)
+        params = list(new_payload.values()) + [of_user]
+        execute_query(query,params)
         return jsonify({"status_code":200,"status": "User updated successfully"})
     except Exception as e:
         return jsonify({"status": f"Internal server error: {str(e)}"}),500
@@ -439,9 +439,9 @@ def delete_note():
         return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
 # Combined Endpoints
-@app.route('/user/<int:userid>/details', methods=['GET'])
+@app.route('/user/<int:getid>/details', methods=['GET'])
 @jwt_required()
-def user_details(userid: int):
+def user_details(getid: int):
     try:
         userid = get_jwt_identity()
         chck = """SELECT user_type FROM user_table WHERE userid = %s"""
@@ -452,15 +452,15 @@ def user_details(userid: int):
         if verify[0] != 'A':
             return jsonify({'status':'Forbidden access'}),403
         user_query = "SELECT userid, name, email FROM user_table WHERE userid = %s"
-        user = execute_query(user_query, (userid,), fetch=True, get_one=True, as_dict=True)
+        user = execute_query(user_query, (getid,), fetch=True, get_one=True, as_dict=True)
         if not user:
             return jsonify({"status": "User not found"}),404, 404
 
         tasks_query = "SELECT title, description, due_date, priority, status FROM task WHERE userid = %s"
-        user_tasks = execute_query(tasks_query, (userid,), fetch=True, as_dict=True)
-
+        user_tasks = execute_query(tasks_query, (getid,), fetch=True, as_dict=True)
+        print(user_tasks,'sks')
         notes_query = "SELECT title, body FROM notes WHERE userid = %s"
-        user_notes = execute_query(notes_query, (userid,), fetch=True, as_dict=True)
+        user_notes = execute_query(notes_query, (getid,), fetch=True, as_dict=True)
 
         if user_tasks:
             for task in user_tasks:
@@ -472,7 +472,7 @@ def user_details(userid: int):
         
         return jsonify({"status": "User details fetched successfully", "details": user}),200
     except Exception as e:
-        return jsonify({"status": f"Internal server error: {str(e)}"}),500, 500
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
 @app.route('/alluser_details', methods=['GET'])
 @jwt_required()
