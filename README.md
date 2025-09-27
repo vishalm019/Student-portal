@@ -15,7 +15,7 @@ It’s designed to be Docker-ready and deployable on AWS EBS/EC2 (optional).
 | Database         | PostgreSQL (psycopg2)      |
 | Authentication   | JWT (Flask-JWT-Extended)   |
 | Password Hashing | werkzeug.security (scrypt) |
-| Containerisation | Docker                     |
+| Containerization | Docker                     |
 
 Features
 
@@ -46,7 +46,7 @@ API Endpoints:
 | Notes    | GET    | /all_notes                               | Fetch all notes                             | Admin         |
 | Notes    | POST   | /edit_notes                              | Edit notes                                  | JWT           |
 | Notes    | POST   | /delete_note                             | Delete note                                 | JWT           |
-| Combined | GET    | `/user/[int:user_id](int:user_id)/details` | Fetch a user's details with tasks + notes   | JWT           |
+| Combined | GET    | /user/[int:user_id](int:user_id)`/details | Fetch a user's details with tasks + notes   | JWT           |
 | Combined | GET    | /alluser_details                         | Fetch all users’ details with tasks + notes | Admin         |
 
 ## Setup (Run Locally)
