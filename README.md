@@ -203,7 +203,7 @@ This allows you to test all APIs with pre-configured endpoints.
 
 4.Push the image:
 
-docker push <account-id>.dkr.ecr.<region>.amazonaws.com/student-portal:latest
+`docker push <account-id>.dkr.ecr.<region>.amazonaws.com/student-portal:latest`
 
 ## 2. Create RDS PostgreSQL Instance
 
