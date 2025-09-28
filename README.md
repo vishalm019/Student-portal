@@ -191,7 +191,7 @@ This allows you to test all APIs with pre-configured endpoints.
 
 ## 1.Push Docker Image to ECR
 
-1. Create a repository in ECR (Elastic Container Registry).
+1.Create a repository in ECR (Elastic Container Registry).
 
 2.Authenticate Docker with ECR:
 
@@ -201,7 +201,7 @@ This allows you to test all APIs with pre-configured endpoints.
 
 `docker tag student-portal:latest <account-id>.dkr.ecr.<region>.amazonaws.com/student-portal:latest`
 
-4. Push the image:
+4.Push the image:
 
 docker push <account-id>.dkr.ecr.<region>.amazonaws.com/student-portal:latest
 
