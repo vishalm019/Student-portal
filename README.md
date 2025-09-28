@@ -263,5 +263,5 @@ This allows you to test all APIs with pre-configured endpoints.
 
 1. Copy the public IP / DNS of the Fargate task froms the service → test in browser/Postman:
 
-http://task-public-ip:5000
+``` http://task-public-ip:5000 ```
 
