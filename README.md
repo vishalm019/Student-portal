@@ -230,17 +230,17 @@ Go to the RDS console.
 
 ### 3. Note the Endpoint:
 
-    After the instance is created, note the endpoint (example:student-portal-db.c36oee8i0x0q.ap-south-1.rds.amazonaws.com).
+After the instance is created, note the endpoint (example:student-portal-db.c36oee8i0x0q.ap-south-1.rds.amazonaws.com).
 
 ### 4. Update db_config.py:
 
-` DB_CONFIG = {
+``` DB_CONFIG = {
     "host": "<your-rds-endpoint>",
     "port": 5432,
     "user": "<master-username>",
     "password": "<password>",
     "dbname": "<database-name>"
-} `
+} ```
 
 ## 3. Create ECS Cluster (Fargate)
 
