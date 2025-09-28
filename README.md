@@ -194,7 +194,8 @@ This allows you to test all APIs with pre-configured endpoints.
 1.Create a repository in ECR (Elastic Container Registry).
 
 2.Authenticate Docker with ECR:
-
+    
+Run the following command to authenticate Docker to your ECR registry:
 `aws ecr get-login-password --region <your-region> | docker login --username AWS --password-stdin <account-id>.dkr.ecr.<region>.amazonaws.com `
 
 3.Tag your Docker image for ECR:
@@ -207,13 +208,31 @@ This allows you to test all APIs with pre-configured endpoints.
 
 ## 2. Create RDS PostgreSQL Instance
 
- - Choose PostgreSQL, give DB name, master username/password.
+### 1. Navigate to the RDS Console:
 
- - Set Public access: Yes (optional: only if connecting from CloudShell or local).
+Go to the RDS console.
 
- - Configure VPC & security group: allow port 5432 from your IP or ECS tasks.
+### 2. Launch a New Database:
 
- - Note the endpoint, you will use this in db_config.py:
+ - Choose "Create database" and select PostgreSQL. Configure the instance with the following settings:
+
+   - DB Instance Identifier: student-portal-db
+
+   - Master Username: admin
+
+   - Master Password: yourpassword
+
+   - VPC: Select your existing VPC
+
+    - Publicly Accessible: Yes
+
+   - VPC Security Groups: Create a new security group or select an existing one that allows inbound traffic on port 5432 from your ECS tasks.
+
+### 3. Note the Endpoint:
+
+    After the instance is created, note the endpoint (example:student-portal-db.c36oee8i0x0q.ap-south-1.rds.amazonaws.com).
+
+### 4. Update db_config.py:
 
 ` DB_CONFIG = {
     "host": "<your-rds-endpoint>",
@@ -225,43 +244,86 @@ This allows you to test all APIs with pre-configured endpoints.
 
 ## 3. Create ECS Cluster (Fargate)
 
-1. Go to ECS → Clusters → Create Cluster → Networking only (Fargate)
+### 1. Navigate to ECS Console:
 
-2. Give it a name (example: student-portal-cluster) and create.
+Go to the ECS console.
+
+### 2. Create a New Cluster:
+
+    - Choose "Networking only" and configure the cluster:
+
+    - Cluster Name: student-portal-cluster
+
+    - VPC: Select your existing VPC
+
+    - Subnets: Select at least two subnets in different Availability Zones
+
+    - Security Groups: Create a new security group or select an existing one that allows inbound traffic on port 5000.
 
 ## 4. Create Task Definition
 
-1. Go to ECS → Task Definitions → Create new Task Definition → Fargate
+### 1. Navigate to Task Definitions:
 
-2. Give it a name, select execution role (default okay).
+In the ECS console, go to "Task Definitions" and click "Create new Task Definition".
 
-3. Add a container:
+### 2. Configure the Task Definition:
 
- - Image: your ECR image URI
+    - Launch Type: Fargate
 
- - Port mapping: 5000
+    - Task Name: student-portal-task
 
- - Memory/CPU: reasonable defaults (e.g., 0.5GB, 0.25 vCPU)
+    - Task Role: Create a new role or select an existing one with the necessary permissions
 
-4. Save the task definition.
+    - Execution Role: Create a new role or select an existing one with the necessary permissions
+
+### 3. Add a Container:
+
+    - Container Name: student-portal
+
+    - Image: <aws_account_id>.dkr.ecr.ap-south-1.amazonaws.com/student-portal:latest
+
+    - Port Mappings: 5000
+
+    - Environment Variables: Add any necessary environment variables, such as the database connection details.
+
+### 4. Save the Task Definition.
+
 
 [task definition](screenshots/ecs_cluster_task_definition.png)
 
-## 5. Deploy Service
+## 5. Create a Service
 
-1. Go to your cluster → Create Service → Fargate
+### 1. Navigate to Services:
 
-2. Select your task definition, desired number of tasks (1 for testing)
+In the ECS console, go to "Services" and click "Create".
 
-3. Configure VPC & Subnets, security group (allow port 5000)
+### 2. Configure the Service:
 
-4. Launch service
+Launch Type: Fargate
+
+Cluster: student-portal-cluster
+
+Service Name: student-portal-service
+
+    - Task Definition: student-portal-task
+
+    - Desired Tasks: 1
+
+    - Network Configuration:
+
+        - VPC: Select your existing VPC
+
+        - Subnets: Select the subnets you chose earlier
+
+        - Security Groups: Select the security group you created or selected earlier
+
+### 3. Create the Service.
 
 [ECS cluster service](screenshots/ecs_cluster_service.png)
 
 ## 6. Access the API
 
-1. Copy the public IP / DNS of the Fargate task froms the service → test in browser/Postman:
+After the service is running, you can access the API by navigating to the public IP address of the load balancer associated with your ECS service. The API will be available at:
 
-``` http://task-public-ip:5000 ```
+``` http://<load_balancer_dns>:5000 ```
 
