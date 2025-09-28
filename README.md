@@ -234,13 +234,14 @@ After the instance is created, note the endpoint (example:student-portal-db.c36o
 
 ### 4. Update db_config.py:
 
-``` DB_CONFIG = {
+` 
+DB_CONFIG = {
     "host": "<your-rds-endpoint>",
     "port": 5432,
     "user": "<master-username>",
     "password": "<password>",
     "dbname": "<database-name>"
-} ```
+} ` 
 
 ## 3. Create ECS Cluster (Fargate)
 
