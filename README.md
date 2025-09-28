@@ -216,17 +216,17 @@ Go to the RDS console.
 
  - Choose "Create database" and select PostgreSQL. Configure the instance with the following settings:
 
-   - DB Instance Identifier: student-portal-db
+- DB Instance Identifier: student-portal-db
 
-   - Master Username: admin
+- Master Username: admin
 
-   - Master Password: yourpassword
+- Master Password: yourpassword
 
-   - VPC: Select your existing VPC
+- VPC: Select your existing VPC
 
-    - Publicly Accessible: Yes
+- Publicly Accessible: Yes
 
-   - VPC Security Groups: Create a new security group or select an existing one that allows inbound traffic on port 5432 from your ECS tasks.
+- VPC Security Groups: Create a new security group or select an existing one that allows inbound traffic on port 5432 from your ECS tasks.
 
 ### 3. Note the Endpoint:
 
@@ -250,13 +250,13 @@ Go to the ECS console.
 
 ### 2. Create a New Cluster:
 
-    - Choose "Networking only" and configure the cluster:
+- Choose "Networking only" and configure the cluster:
 
-    - Cluster Name: student-portal-cluster
+- Cluster Name: student-portal-cluster
 
-    - VPC: Select your existing VPC
+- VPC: Select your existing VPC
 
-    - Subnets: Select at least two subnets in different Availability Zones
+- Subnets: Select at least two subnets in different Availability Zones
 
     - Security Groups: Create a new security group or select an existing one that allows inbound traffic on port 5000.
 
@@ -268,23 +268,23 @@ In the ECS console, go to "Task Definitions" and click "Create new Task Definiti
 
 ### 2. Configure the Task Definition:
 
-    - Launch Type: Fargate
+- Launch Type: Fargate
 
-    - Task Name: student-portal-task
+- Task Name: student-portal-task
 
-    - Task Role: Create a new role or select an existing one with the necessary permissions
+- Task Role: Create a new role or select an existing one with the necessary permissions
 
-    - Execution Role: Create a new role or select an existing one with the necessary permissions
+- Execution Role: Create a new role or select an existing one with the necessary permissions
 
 ### 3. Add a Container:
 
-    - Container Name: student-portal
+- Container Name: student-portal
 
-    - Image: <aws_account_id>.dkr.ecr.ap-south-1.amazonaws.com/student-portal:latest
+- Image: <aws_account_id>.dkr.ecr.ap-south-1.amazonaws.com/student-portal:latest
 
-    - Port Mappings: 5000
+- Port Mappings: 5000
 
-    - Environment Variables: Add any necessary environment variables, such as the database connection details.
+- Environment Variables: Add any necessary environment variables, such as the database connection details.
 
 ### 4. Save the Task Definition.
 
@@ -305,17 +305,17 @@ Cluster: student-portal-cluster
 
 Service Name: student-portal-service
 
-    - Task Definition: student-portal-task
+- Task Definition: student-portal-task
 
-    - Desired Tasks: 1
+- Desired Tasks: 1
 
-    - Network Configuration:
+- Network Configuration:
 
-        - VPC: Select your existing VPC
+    1. VPC: Select your existing VPC
 
-        - Subnets: Select the subnets you chose earlier
+    2. Subnets: Select the subnets you chose earlier
 
-        - Security Groups: Select the security group you created or selected earlier
+    3. Security Groups: Select the security group you created or selected earlier
 
 ### 3. Create the Service.
 
