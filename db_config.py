@@ -10,3 +10,5 @@ DB_CONFIG = {
 
 conn = psycopg2.connect(**DB_CONFIG)
 cur = conn.cursor()
+
+parent_dir = 'D:\Myrepo\student-portal'

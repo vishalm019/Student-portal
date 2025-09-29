@@ -1,9 +1,10 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from datetime import datetime,timedelta,timezone
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify,send_file
 import random
-from db_config import DB_CONFIG
+import os
+from db_config import DB_CONFIG,parent_dir
 import string
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt,create_refresh_token
 from functools import wraps
@@ -22,6 +23,14 @@ def json_validate(required_fields):
             missing.append(field)
     return missing
 
+def validate(required_fields):
+    payload = request.form
+    missing = []
+    for field in required_fields:
+        value = payload.get(field)
+        if value is None or str(value).strip() == "":
+            missing.append(field)
+    return missing
 
 def execute_query(query, params=None, fetch=False, get_one=False, as_dict=False):
     conn = psycopg2.connect(**DB_CONFIG)
@@ -192,15 +201,18 @@ def delete_user():
 @jwt_required()
 def add_task():
     try:
+        print('helo')
         userid = get_jwt_identity()
-        to_user = request.json.get('to_user')
-        title = request.json.get('title')
-        description = request.json.get('description')
-        due_date = request.json.get('due_date')
-        priority = request.json.get('priority')
-        status = request.json.get('status')
-        validate = ["to_user","title","description","due_date","priority","status"]
-        missing = json_validate(validate)
+        to_user = request.form.get('to_user')
+        title = request.form.get('title')
+        description = request.form.get('description')
+        due_date = request.form.get('due_date')
+        priority = request.form.get('priority')
+        status = request.form.get('status')
+        filename = request.form.get('filename')
+        total = request.files
+        validation = ["to_user","title","description","due_date","priority","status"]
+        missing = validate(validation)
         if missing:
             return jsonify({'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)}),400
         chck = """SELECT user_type FROM user_table WHERE userid = %s"""
@@ -215,10 +227,68 @@ def add_task():
             return jsonify({'status_code':500,'status':'Invalid userid'})
         if verify[0] != 'A':
             return jsonify({'status':'Forbidden access'}),403
-        query = "INSERT INTO task (userid, title, description, due_date, priority, status) VALUES (%s, %s, %s, %s, %s, %s)"
+        query = "INSERT INTO task (userid, title, description, due_date, priority, status) VALUES (%s, %s, %s, %s, %s, %s) RETURNING task_id"
         params = (to_user,title,description,due_date,priority,status)
-        execute_query(query, params)
+        taskid = execute_query(query, params,fetch=True,get_one=True)
+        path_name = 'Task'
+        check1 = parent_dir + '/' + path_name
+        bool1 = os.path.exists(check1)
+        if bool1 is False:
+            os.makedirs(check1)
+        check2 = check1 + '/' + to_user
+        bool2 = os.path.exists(check2)
+        if bool2 is False:
+            os.makedirs(check2)
+        check3 = check2 + '/' + str(taskid[0])
+        bool3 = os.path.exists(check3)
+        if bool3 is False:
+            os.makedirs(check3)
+        final_path = os.path.join(check3,filename)
+        file = total.get(filename)
+        file.save(final_path)
+        query2 = "UPDATE task SET file_save = %s WHERE task_id = %s"
+        params = (final_path,taskid[0],)
+        execute_query(query2,params)
         return jsonify({"status": "Successfully added task"})
+    except Exception as e:
+        return jsonify({"status": f"Internal server error: {str(e)}"}),500
+
+@app.route('/task_image', methods=['POST'])
+@jwt_required()
+def task_image():
+    try:
+        user = get_jwt_identity()
+        taskid = request.json.get('taskid')
+        validate = ["taskid"]
+        missing = json_validate(validate)
+        if missing:
+            return jsonify({'status': 'Failed','message':"Please fill these fields:{value}".format(value=missing)}),400
+        user_exists_query = "SELECT userid FROM user_table WHERE userid = %s"
+        params = (user,)
+        user_exists = execute_query(user_exists_query,params, fetch=True, get_one=True)
+        if not user_exists:
+            return jsonify({"status": "User not found"}),404
+        task_exists_query = "SELECT task_id,file_save FROM task WHERE task_id = %s"
+        params = (taskid,)
+        task_exists = execute_query(task_exists_query,params, fetch=True, get_one=True)
+        if not task_exists:
+            return jsonify({"status": "Task not found"}),404
+        if task_exists[1]:
+            bool1 = os.path.exists(task_exists[1])
+            if bool1 is True:
+                filename = task_exists[1].split('/')
+                ext = filename[-1].split('.')
+                if ext[-1] == 'jpg'or ext[-1] == 'jpeg' or ext[-1] == 'png':
+                    return send_file(task_exists[1],download_name=filename[-1],as_attachment=True,mimetype='image/jpeg')
+                elif ext[-1] == 'pdf':
+                    return send_file(task_exists[1],download_name=filename[-1],as_attachment=True,mimetype='application/pdf')
+                elif ext[-1] == 'csv':
+                    return send_file(task_exists[1],download_name=filename[-1],as_attachment=True,mimetype='text/csv')
+            else:
+                return jsonify({"status": "No such file exists"}),404
+        else:
+            return jsonify({"status_code": 404, "status": "There is not file stored for this task"})
+        return jsonify({"status": "Successfully fetched tasks"})
     except Exception as e:
         return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
