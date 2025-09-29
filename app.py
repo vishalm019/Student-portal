@@ -253,9 +253,9 @@ def add_task():
     except Exception as e:
         return jsonify({"status": f"Internal server error: {str(e)}"}),500
 
-@app.route('/task_image', methods=['POST'])
+@app.route('/task_file', methods=['POST'])
 @jwt_required()
-def task_image():
+def task_file():
     try:
         user = get_jwt_identity()
         taskid = request.json.get('taskid')
