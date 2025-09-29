@@ -25,6 +25,10 @@ Features
 
 - Role-based access (Admin vs User)
 
+- File upload support for tasks (Admins can attach files while creating a task).
+
+- Download attached files for tasks.
+
 API Endpoints:
 
 | Module   | Method | Endpoint                                 | Description                                 | Auth Required |
@@ -36,10 +40,11 @@ API Endpoints:
 | Users    | POST   | /update_user                             | Update an existing user                     | Admin         |
 | Users    | POST   | /delete_user                             | Delete a user                               | Admin         |
 | Users    | GET    | /get_users                               | Fetch all users                             | Admin         |
-| Tasks    | POST   | /add_task                                | Add task                                    | JWT           |
+| Tasks    | POST   | /add_task                                | Add task(accepts form-data with file)       | JWT           |
 | Tasks    | POST   | /get_task                                | Fetch tasks for a user                      | JWT           |
 | Tasks    | POST   | /edit_task                               | Edit a task                                 | JWT           |
 | Tasks    | GET    | /all_tasks                               | Fetch all tasks (Admin only)                | Admin         |
+| Tasks    | GET    | /task_file                               | Download attached file for a task           | JWT           |
 | Tasks    | POST   | /delete_task                             | Delete a task                               | JWT           |
 | Notes    | POST   | /add_notes                               | Add notes                                   | JWT           |
 | Notes    | GET    | /get_notes                               | Fetch notes for a user                      | JWT           |
